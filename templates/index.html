@@ -1,0 +1,197 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>NICU Daily Snapshot</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin: 0; background: #fff; color: #111; }
+      .wrap { max-width: 900px; margin: 0 auto; padding: 24px; }
+      .card { border: 1px solid #e5e5e5; border-radius: 16px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+      .grid { display: grid; gap: 16px; }
+      @media (min-width: 900px) { .grid { grid-template-columns: 1fr 1fr; } }
+      label { display:block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+      input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 12px; font-size: 14px; }
+      textarea { min-height: 140px; }
+      button { background: #111; color: white; border: 0; padding: 10px 14px; border-radius: 12px; font-size: 14px; cursor: pointer; }
+      button.secondary { background: white; color: #111; border: 1px solid #ddd; }
+      .muted { color: #666; font-size: 13px; }
+      h1 { margin: 0; font-size: 26px; }
+      h2 { margin: 0 0 10px 0; font-size: 16px; }
+      ul { margin: 8px 0 0 18px; }
+      .row { display:flex; gap: 10px; align-items:center; flex-wrap: wrap; }
+      pre { white-space: pre-wrap; word-break: break-word; background:#fafafa; border:1px solid #eee; padding: 12px; border-radius: 12px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>NICU Daily Snapshot</h1>
+      <p class="muted">Educational support only. Not medical advice. Use this to prepare questions for your NICU team.</p>
+
+      <div class="grid">
+        <div class="card">
+          <h2>Today in the NICU</h2>
+
+          <div class="row">
+            <div style="flex:1; min-width: 180px;">
+              <label>Date</label>
+              <input id="dateISO" type="date" />
+            </div>
+
+            <div style="flex:1; min-width: 180px;">
+              <label>Weight (kg, optional)</label>
+              <input id="weightKg" type="text" placeholder="e.g., 1.42" />
+            </div>
+          </div>
+
+          <div class="row" style="margin-top: 12px;">
+            <div style="flex:1; min-width: 180px;">
+              <label>Respiratory support</label>
+              <select id="respSupport">
+                <option>Room air</option>
+                <option>NC</option>
+                <option>HFNC</option>
+                <option>CPAP</option>
+                <option>Vent</option>
+              </select>
+            </div>
+
+            <div style="flex:1; min-width: 180px;">
+              <label>Feeding</label>
+              <select id="feedingMethod">
+                <option>Breast</option>
+                <option>Bottle</option>
+                <option selected>Combo</option>
+                <option>NG/OG tube</option>
+                <option>NPO</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="margin-top: 12px;">
+            <label>Notes</label>
+            <textarea id="notes" placeholder="Example: O2 weaned 30→25%. Two brady events overnight. Feeds increased. Worried about weight gain and when oral feeds can start."></textarea>
+          </div>
+
+          <div class="row" style="margin-top: 12px;">
+            <button id="generateBtn">Generate summary & questions</button>
+            <button id="copyBtn" class="secondary" style="display:none;">Copy for rounds</button>
+            <span id="status" class="muted"></span>
+          </div>
+          <div id="error" class="muted" style="color:#b00020; margin-top:10px;"></div>
+        </div>
+
+        <div class="card">
+          <h2>Generated Output</h2>
+          <div id="outEmpty" class="muted">Fill today’s snapshot and click Generate.</div>
+          <div id="out" style="display:none;"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // set today's date
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth()+1).padStart(2,'0');
+      const dd = String(d.getDate()).padStart(2,'0');
+      document.getElementById('dateISO').value = `${yyyy}-${mm}-${dd}`;
+
+      const statusEl = document.getElementById('status');
+      const errEl = document.getElementById('error');
+      const outEl = document.getElementById('out');
+      const outEmptyEl = document.getElementById('outEmpty');
+      const copyBtn = document.getElementById('copyBtn');
+
+      function renderSection(title, items) {
+        if (!items || items.length === 0) return '';
+        const lis = items.map(x => `<li>${escapeHtml(x)}</li>`).join('');
+        return `<div style="margin-top:14px;"><div style="font-weight:600;">${title}</div><ul>${lis}</ul></div>`;
+      }
+
+      function escapeHtml(s) {
+        return String(s)
+          .replaceAll('&','&amp;')
+          .replaceAll('<','&lt;')
+          .replaceAll('>','&gt;')
+          .replaceAll('"','&quot;')
+          .replaceAll("'","&#039;");
+      }
+
+      function makeCopyText(data) {
+        const lines = [];
+        const push = (title, items) => {
+          if (!items || items.length === 0) return;
+          lines.push(title + ':');
+          items.forEach(i => lines.push('- ' + i));
+          lines.push('');
+        };
+        push('Breathing', data.summary.breathing);
+        push('Feeding', data.summary.feeding);
+        push('Growth', data.summary.growth);
+        push('Events', data.summary.events);
+        lines.push('Questions to ask:');
+        for (const [k, arr] of Object.entries(data.questions)) {
+          if (!arr || arr.length === 0) continue;
+          lines.push('\n' + k.toUpperCase() + ':');
+          arr.forEach(q => lines.push('- ' + q));
+        }
+        return lines.join('\n').trim();
+      }
+
+      let lastPayload = null;
+
+      document.getElementById('generateBtn').addEventListener('click', async () => {
+        errEl.textContent = '';
+        statusEl.textContent = 'Generating...';
+        copyBtn.style.display = 'none';
+        outEl.style.display = 'none';
+        outEmptyEl.style.display = 'none';
+
+        const form = new FormData();
+        form.append('dateISO', document.getElementById('dateISO').value);
+        form.append('respSupport', document.getElementById('respSupport').value);
+        form.append('feedingMethod', document.getElementById('feedingMethod').value);
+        form.append('weightKg', document.getElementById('weightKg').value);
+        form.append('notes', document.getElementById('notes').value);
+
+        try {
+          const res = await fetch('/api/generate', { method: 'POST', body: form });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Request failed');
+
+          lastPayload = data;
+
+          const html =
+            renderSection('Summary • Breathing', data.summary.breathing) +
+            renderSection('Summary • Feeding', data.summary.feeding) +
+            renderSection('Summary • Growth', data.summary.growth) +
+            renderSection('Summary • Events', data.summary.events) +
+            '<hr style="margin:16px 0; border:0; border-top:1px solid #eee;" />' +
+            renderSection('Questions • Breathing', data.questions.breathing) +
+            renderSection('Questions • Feeding', data.questions.feeding) +
+            renderSection('Questions • Growth', data.questions.growth) +
+            renderSection('Questions • Events', data.questions.events) +
+            renderSection('Questions • Discharge', data.questions.discharge);
+
+          outEl.innerHTML = html || '<div class="muted">No output. Add a bit more context and try again.</div>';
+          outEl.style.display = 'block';
+          statusEl.textContent = '';
+          copyBtn.style.display = 'inline-block';
+        } catch (e) {
+          outEmptyEl.style.display = 'block';
+          statusEl.textContent = '';
+          errEl.textContent = e.message || 'Something went wrong.';
+        }
+      });
+
+      copyBtn.addEventListener('click', async () => {
+        if (!lastPayload) return;
+        const text = makeCopyText(lastPayload);
+        await navigator.clipboard.writeText(text);
+        statusEl.textContent = 'Copied!';
+        setTimeout(() => statusEl.textContent = '', 1200);
+      });
+    </script>
+  </body>
+</html>
