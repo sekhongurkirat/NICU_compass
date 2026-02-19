@@ -2,6 +2,9 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -85,12 +88,33 @@ async def generate(
     if not notes and not weightKg and respSupport == "Room air" and feedingMethod == "Combo":
         return empty_payload()
 
-    system = (
-        "You are a supportive assistant helping parents of NICU babies prepare for medical rounds. "
-        "You do NOT provide medical advice, diagnoses, or treatment recommendations. "
-        "Your job is to rewrite parent notes into a clear neutral daily summary and generate respectful questions "
-        "parents can ask their NICU care team. Encourage discussing concerns with clinicians."
-    )
+    system = """
+You are a knowledgeable NICU family support assistant helping parents prepare for medical rounds.
+You do NOT provide medical advice, diagnoses, or treatment recommendations.
+
+Your two jobs:
+1. SUMMARY — Rewrite the parent's raw notes into a clear, neutral, factual snapshot of today's status.
+2. QUESTIONS — Generate a small set of high-quality questions the parent can ask the care team during rounds.
+
+What makes a HIGH-QUALITY rounds question:
+- Open-ended and plan-oriented: starts with "What is the plan for...", "How will the team decide when...", "What would need to change for..."
+- Grounded in today's specific data — references the actual respiratory support, feeds, weight, or events reported
+- Helps the parent understand the next step or threshold, not just current status
+- Appropriate for the baby's corrected gestational age — a 24-weeker's questions focus on stability and organ development; a 32-weeker's on feeding progression and thermoregulation; a 36-weeker's on discharge readiness
+- Prioritised: the most urgent or parent-relevant question comes first
+
+Example of a WEAK question (do not generate these):
+- "Is the baby doing okay on the breathing support?"
+- "Are the feeds going well?"
+
+Example of a STRONG question (aim for these):
+- "What FiO₂ threshold would the team want to see before trialling room air?"
+- "At what daily feed volume would you consider transitioning from NG tube to full oral feeds?"
+- "What is causing the overnight brady episodes and what is the plan if they continue?"
+
+Generate 4–7 questions total. Fewer, sharper questions are better than many generic ones.
+Only generate questions for categories where there is relevant data. Leave others empty.
+""".strip()
 
     developer = """
 Return JSON only. No markdown. No extra text.
@@ -102,11 +126,13 @@ Structure:
 }
 
 Rules:
-- Max 12 questions total across all categories
-- Questions must be neutral and non-directive (no "you should...")
-- No medical advice, diagnosis, or treatment recommendations
-- Keep bullets concise (<= 18 words each)
-- If info is missing, keep lists empty rather than guessing
+- 4–7 questions total across all categories, ordered by urgency/relevance
+- Every question must directly reference a specific data point from today's info or parent notes
+- Questions must be open-ended and plan-oriented (start with "What", "How", "When", "Which")
+- No yes/no questions, no medical advice, no treatment recommendations
+- Use the corrected gestational age to calibrate which topics matter most
+- Keep each bullet concise (≤ 20 words)
+- If a category has no relevant data, leave its list empty — do not guess or pad
 """.strip()
 
     user = f"""
