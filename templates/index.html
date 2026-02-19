@@ -42,6 +42,15 @@
               <label>Weight (kg, optional)</label>
               <input id="weightKg" type="text" placeholder="e.g., 1.42" />
             </div>
+
+            <div style="flex:1; min-width: 180px;">
+              <label>Corrected gestational age (optional)</label>
+              <div style="display:flex; gap:6px; align-items:center;">
+                <input id="cgaWeeks" type="number" min="22" max="44" placeholder="Wks" style="width:60px;" />
+                <span class="muted">+</span>
+                <input id="cgaDays" type="number" min="0" max="6" placeholder="Days" style="width:60px;" />
+              </div>
+            </div>
           </div>
 
           <div class="row" style="margin-top: 12px;">
@@ -153,6 +162,8 @@
         form.append('respSupport', document.getElementById('respSupport').value);
         form.append('feedingMethod', document.getElementById('feedingMethod').value);
         form.append('weightKg', document.getElementById('weightKg').value);
+        form.append('cgaWeeks', document.getElementById('cgaWeeks').value);
+        form.append('cgaDays', document.getElementById('cgaDays').value);
         form.append('notes', document.getElementById('notes').value);
 
         try {

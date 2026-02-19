@@ -58,6 +58,8 @@ async def generate(
     respSupport: str = Form(...),
     feedingMethod: str = Form(...),
     weightKg: Optional[str] = Form(None),
+    cgaWeeks: Optional[str] = Form(None),
+    cgaDays: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
 ):
     api_key = os.getenv("OPENAI_API_KEY")
@@ -69,6 +71,16 @@ async def generate(
     feedingMethod = clamp_text(feedingMethod, 30)
     weightKg = clamp_text(weightKg, 20) if weightKg else None
     notes = clamp_text(notes, 1200) if notes else None
+
+    cga: Optional[str] = None
+    if cgaWeeks:
+        try:
+            w = int(cgaWeeks)
+            d = int(cgaDays) if cgaDays else 0
+            if 22 <= w <= 44 and 0 <= d <= 6:
+                cga = f"{w}+{d}"
+        except ValueError:
+            pass
 
     if not notes and not weightKg and respSupport == "Room air" and feedingMethod == "Combo":
         return empty_payload()
@@ -100,6 +112,7 @@ Rules:
     user = f"""
 Today's info:
 Date: {dateISO}
+Corrected gestational age: {cga + " weeks" if cga else "unknown"}
 Respiratory support: {respSupport}
 Feeding: {feedingMethod}
 Weight (kg): {weightKg or "unknown"}
