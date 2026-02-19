@@ -21,6 +21,11 @@
       ul { margin: 8px 0 0 18px; }
       .row { display:flex; gap: 10px; align-items:center; flex-wrap: wrap; }
       pre { white-space: pre-wrap; word-break: break-word; background:#fafafa; border:1px solid #eee; padding: 12px; border-radius: 12px; }
+      .trend-table { width:100%; border-collapse:collapse; font-size:13px; }
+      .trend-table th { text-align:left; padding:4px 8px 6px 0; color:#666; font-weight:600; border-bottom:1px solid #eee; }
+      .trend-table th:not(:first-child) { text-align:right; }
+      .trend-table td { padding:5px 8px 5px 0; }
+      .trend-table td:not(:first-child) { text-align:right; }
     </style>
   </head>
   <body>
@@ -96,6 +101,11 @@
           <div id="out" style="display:none;"></div>
         </div>
       </div>
+
+      <div id="weightTrendCard" class="card" style="display:none; margin-top:16px;">
+        <h2>Weight Trend</h2>
+        <div id="weightTrendContent"></div>
+      </div>
     </div>
 
     <script>
@@ -148,6 +158,63 @@
         return lines.join('\n').trim();
       }
 
+      // ── Weight trend (localStorage) ──────────────────────────────
+      const WEIGHT_KEY = 'nicu_weight_history';
+
+      function loadWeightHistory() {
+        try { return JSON.parse(localStorage.getItem(WEIGHT_KEY) || '[]'); }
+        catch { return []; }
+      }
+
+      function saveWeightEntry(date, weightStr) {
+        const weight = parseFloat(weightStr);
+        if (!date || isNaN(weight)) return;
+        const history = loadWeightHistory();
+        const idx = history.findIndex(e => e.date === date);
+        if (idx >= 0) history[idx].weight = weight;
+        else history.push({ date, weight });
+        history.sort((a, b) => a.date.localeCompare(b.date));
+        localStorage.setItem(WEIGHT_KEY, JSON.stringify(history.slice(-14)));
+      }
+
+      function weightHistoryString() {
+        const history = loadWeightHistory();
+        if (history.length < 2) return '';
+        return history.slice(-7).map((e, i, arr) => {
+          const prev = i > 0 ? arr[i - 1].weight : null;
+          const delta = prev !== null ? Math.round((e.weight - prev) * 1000) : null;
+          const deltaStr = delta !== null ? ` (${delta >= 0 ? '+' : ''}${delta}g)` : '';
+          return `${e.date}: ${e.weight}kg${deltaStr}`;
+        }).join(', ');
+      }
+
+      function renderWeightTrend() {
+        const history = loadWeightHistory();
+        const card = document.getElementById('weightTrendCard');
+        if (history.length < 2) { card.style.display = 'none'; return; }
+        card.style.display = 'block';
+        const last7 = history.slice(-7);
+        let html = '<table class="trend-table"><thead><tr><th>Date</th><th>Weight</th><th>Change</th></tr></thead><tbody>';
+        last7.forEach((e, i) => {
+          const prev = i > 0 ? last7[i - 1].weight : null;
+          const delta = prev !== null ? Math.round((e.weight - prev) * 1000) : null;
+          const arrow = delta === null ? '' : delta > 0 ? '↑' : delta < 0 ? '↓' : '→';
+          const color = delta === null ? '#666' : delta > 0 ? '#2e7d32' : delta < 0 ? '#b00020' : '#666';
+          const deltaStr = delta === null ? '—' : `${delta > 0 ? '+' : ''}${delta}g`;
+          const dateStr = new Date(e.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          html += `<tr>
+            <td>${dateStr}</td>
+            <td>${e.weight} kg</td>
+            <td style="color:${color};font-weight:600;">${arrow} ${deltaStr}</td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('weightTrendContent').innerHTML = html;
+      }
+
+      renderWeightTrend();
+      // ─────────────────────────────────────────────────────────────
+
       let lastPayload = null;
 
       document.getElementById('generateBtn').addEventListener('click', async () => {
@@ -165,6 +232,12 @@
         form.append('cgaWeeks', document.getElementById('cgaWeeks').value);
         form.append('cgaDays', document.getElementById('cgaDays').value);
         form.append('notes', document.getElementById('notes').value);
+
+        const dateVal = document.getElementById('dateISO').value;
+        const weightVal = document.getElementById('weightKg').value;
+        if (dateVal && weightVal) saveWeightEntry(dateVal, weightVal);
+        renderWeightTrend();
+        form.append('weightHistory', weightHistoryString());
 
         try {
           const res = await fetch('/api/generate', { method: 'POST', body: form });

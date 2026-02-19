@@ -63,6 +63,7 @@ async def generate(
     weightKg: Optional[str] = Form(None),
     cgaWeeks: Optional[str] = Form(None),
     cgaDays: Optional[str] = Form(None),
+    weightHistory: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
 ):
     api_key = os.getenv("OPENAI_API_KEY")
@@ -73,6 +74,7 @@ async def generate(
     respSupport = clamp_text(respSupport, 30)
     feedingMethod = clamp_text(feedingMethod, 30)
     weightKg = clamp_text(weightKg, 20) if weightKg else None
+    weightHistory = clamp_text(weightHistory, 300) if weightHistory else None
     notes = clamp_text(notes, 1200) if notes else None
 
     cga: Optional[str] = None
@@ -142,6 +144,7 @@ Corrected gestational age: {cga + " weeks" if cga else "unknown"}
 Respiratory support: {respSupport}
 Feeding: {feedingMethod}
 Weight (kg): {weightKg or "unknown"}
+Weight history: {weightHistory or "none"}
 
 Parent notes:
 {notes or "none"}
