@@ -114,7 +114,9 @@
       const yyyy = d.getFullYear();
       const mm = String(d.getMonth()+1).padStart(2,'0');
       const dd = String(d.getDate()).padStart(2,'0');
-      document.getElementById('dateISO').value = `${yyyy}-${mm}-${dd}`;
+      const today = `${yyyy}-${mm}-${dd}`;
+      document.getElementById('dateISO').value = today;
+      document.getElementById('dateISO').max = today;
 
       const statusEl = document.getElementById('status');
       const errEl = document.getElementById('error');
